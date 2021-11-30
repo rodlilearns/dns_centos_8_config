@@ -1,0 +1,20 @@
+$TTL 86400
+@   IN  SOA     ns1.rodlihosting.local. root.rodlihosting.local. (
+                                              3           ;Serial
+                                              3600        ;Refresh
+                                              1800        ;Retry
+                                              604800      ;Expire
+                                              86400       ;Minimum TTL
+)
+
+;Name Server Information
+@       IN  NS      ns1.rodlihosting.local.
+
+;IP address of Name Server
+ns1       IN  A       192.168.122.8
+
+;A - Record HostName To Ip Address
+www     IN  A       192.168.122.9
+
+;CNAME record
+ftp     IN CNAME        www.rodlihosting.local.

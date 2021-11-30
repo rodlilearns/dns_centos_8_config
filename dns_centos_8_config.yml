@@ -1,0 +1,129 @@
+# https://www.rosehosting.com/blog/how-to-set-up-private-dns-servers-with-bind-on-centos-8/
+---
+- name: Configure DNS Server on CentOS 8
+  hosts: dns-server
+  tasks:
+
+    - name: Set static IP address on CentOS 8 machine.
+      community.general.nmcli:
+      become: true
+        conn_name: my-eth1
+        ifname: eth1
+        type: ethernet
+        ip4: 192.168.122.8
+        gw4: 192.168.122.1
+        state: present
+
+    - name: Configure hostname
+      ansible.builtin.hostname:
+      become: true
+        name: ns1.rodlihosting.local
+
+    - name: Update system
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+
+    - name: Install BIND DNS server
+      ansible.builtin.dnf:
+        name:
+          - bind
+          - bind-utils
+        state: present
+
+    - name: Start and enable the BIND service
+      ansible.builtin.service:
+        name: named
+        state: started
+        enabled: yes
+
+    - name: Configure BIND server to listen on all network interfaces, not just localhost
+      ansible.builtin.lineinfile:
+        path: /etc/named.conf
+        regexp: '^//listen-on port 53 { 127.0.0.1; };'
+        line: '# //listen-on port 53 { 127.0.0.1; };'
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Configure BIND server to listen on all network interfaces, not just localhost
+      ansible.builtin.lineinfile:
+        path: /etc/named.conf
+        regexp: '^//listen-on-v6 port 53 { ::1; };'
+        line: '# //listen-on-v6 port 53 { ::1; };'
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Configure BIND server to listen on all network interfaces, not just localhost
+      ansible.builtin.lineinfile:
+        path: /etc/named.conf
+        regexp: '^allow-query     { localhost; };'
+        line: 'allow-query     { localhost;192.168.122.0/24; };'
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Create Forward and Reverse DNS Zone
+      ansible.builtin.blockinfile:
+        path: /etc/named.conf
+        block: |
+          //Forward Zone
+          zone "rodlihosting.local" IN {
+            type master;
+            file "rodlihosting.local.db"
+            allow-update { none; };
+          };
+
+          //Reverse Zone
+          zone "122.168.192.in-addr.arpa" IN {
+            type master;
+            file "192.168.122.db";
+            allow-update { none; };
+          };
+
+    - name: Create Forward Zone Files
+      ansible.builtin.template:
+        src: rodlihosting.local.db.j2
+        dest: /var/named/rodlihosting.local.db
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Create Reverse Zone Files
+      ansible.builtin.template:
+        src: 192.168.122.db.j2
+        dest: /var/named/192.168.122.db
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Restart the BIND service
+      ansible.builtin.service:
+        name: named
+        state: restarted
+
+    - name: Configure Firewall
+      ansible.posix.firewalld:
+        port: 53/udp
+        permanent: yes
+        state: enabled
+
+    - name: Restart Firewall
+      ansible.builtin.service:
+        name: firewalld
+        state: restarted
+
+    - name: Add DNS server IP to resolve.conf
+      ansible.builtin.lineinfile:
+        path: /etc/resolve.conf
+        line: "nameserver 192.168.122.8"
+
+    - name: Verify DNS server
+      command: 'dig www.rodlihosting.local'
+      register: results_dig
+
+    - name: Debug results_dig
+      debug:
+        var: results_dig
+
